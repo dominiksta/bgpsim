@@ -1,1 +1,3 @@
-tests/20200101.as-rel.txt.bz2
+*.bz2
+__pycache__
+.venv
