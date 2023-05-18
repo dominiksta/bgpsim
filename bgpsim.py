@@ -323,6 +323,9 @@ class ASGraph:
         current_path_len = self.g.nodes[importer][NODE_PATH_LEN]
         assert current_pref == new_pref
         assert new_path_len >= current_path_len
+        assert [
+            path_is_valley_free(self, p) for p in new_paths
+        ].count(False) == 0
 
         if new_path_len == current_path_len:
             self.g.nodes[importer][NODE_BEST_PATHS].extend(new_paths)
@@ -365,3 +368,27 @@ class ASGraph:
             cnt["peerings"],
         )
         return graph
+
+
+def path_is_valley_free(graph: ASGraph, path: Sequence[int]) -> bool:
+    """Check that the given path is valley free.
+
+    Explanation from "AS relationships, customer cones, and validation", Luckie et
+    al., 10.1145/2504730.2504735:
+
+    "...each path consists of an uphill segment of zero or more c2p or sibling links,
+    zero or one p2p links at the top of the path, followed by a downhill segment of
+    zero or more p2c or sibling links"
+    """
+
+    relationships: list[Relationship] = [
+        graph.g[path[i]][path[i+1]][EDGE_REL] for i in range(0, len(path) - 1)
+    ]
+
+    for i in range(0, len(relationships) - 1):
+        if relationships[i] < relationships[i+1]: return False
+
+    if relationships.count(Relationship.P2P) > 1: return False
+
+    return True
+
