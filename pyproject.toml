@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bgpsim"
+description = "BGP path propagation inference"
+readme = "README.md"
+requires-python = ">=3.8"
+keywords = ["bgp", "networks", "internet"]
+license = {file = "LICENSE"}
+dependencies = [
+    "networkx",
+]
+dynamic = ["version"]
