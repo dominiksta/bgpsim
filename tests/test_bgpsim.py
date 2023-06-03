@@ -15,7 +15,6 @@ from bgpsim import (
     WorkQueue,
     EDGE_REL,
     NODE_BEST_PATHS,
-    NODE_PATH_LEN,
 )
 
 
@@ -252,10 +251,10 @@ class TestWorkQueue(unittest.TestCase):
         self.graph = _make_graph_implicit_withdrawal()
         self.node_ann = NodeAccouncementData()
         self.graph.g.nodes[3][NODE_BEST_PATHS] = [()]
-        self.graph.g.nodes[3][NODE_PATH_LEN] = 0
+        self.node_ann.path_len[3] = 0
         self.node_ann.path_pref[3] = PathPref.CUSTOMER
         self.graph.g.nodes[7][NODE_BEST_PATHS] = [(7, 7)]
-        self.graph.g.nodes[7][NODE_PATH_LEN] = 2
+        self.node_ann.path_len[7] = 2
         self.node_ann.path_pref[7] = PathPref.CUSTOMER
         self.workqueue = WorkQueue()
         self.workqueue.add_work(self.graph, self.node_ann, 3)

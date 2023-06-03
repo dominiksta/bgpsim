@@ -23,7 +23,6 @@ class NodeAccouncementData():
 
 
 NODE_BEST_PATHS = "best-paths"
-NODE_PATH_LEN = "path-len"
 NODE_IMPORT_FILTER = "import-filter"
 EDGE_REL = "edge-attr-relationship"
 
@@ -147,7 +146,7 @@ class WorkQueue:
         for downstream in graph.g[exporter]:
             downstream_pref = PathPref.from_relationship(graph, exporter, downstream)
             if pref == PathPref.CUSTOMER or downstream_pref == PathPref.PROVIDER:
-                depth = graph.g.nodes[exporter][NODE_PATH_LEN]
+                depth = node_ann.path_len[exporter]
                 edge = (exporter, downstream)
                 self.pref2depth2edge[downstream_pref][depth].append(edge)
 
@@ -157,7 +156,7 @@ class WorkQueue:
         for downstream in graph.g[exporter]:
             downstream_pref = PathPref.from_relationship(graph, exporter, downstream)
             if pref == PathPref.CUSTOMER or downstream_pref == PathPref.PROVIDER:
-                depth = graph.g.nodes[exporter][NODE_PATH_LEN]
+                depth = node_ann.path_len[exporter]
                 edge = (exporter, downstream)
                 assert edge in self.pref2depth2edge[downstream_pref][depth]
         return True
@@ -353,11 +352,11 @@ class ASGraph:
 
         if current_pref == PathPref.UNKNOWN:
             self.g.nodes[importer][NODE_BEST_PATHS] = new_paths
-            self.g.nodes[importer][NODE_PATH_LEN] = new_path_len
+            node_ann.path_len[importer] = new_path_len
             node_ann.path_pref[importer] = new_pref
             return True
 
-        current_path_len = self.g.nodes[importer][NODE_PATH_LEN]
+        current_path_len = node_ann.path_len[importer]
         assert current_pref == new_pref
         assert new_path_len >= current_path_len
         assert [
