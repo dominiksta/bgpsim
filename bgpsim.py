@@ -6,7 +6,7 @@ import copy
 import dataclasses
 import enum
 import logging
-from typing import Callable, Mapping, Sequence, Tuple, Union
+from typing import Callable, Mapping, Optional, Sequence, Tuple, Union
 
 import networkx as nx
 
@@ -205,7 +205,11 @@ class ASGraph:
                 if neigh in path:
                     raise ValueError(f"Neighbor AS{neigh} poisoned in announcement")
 
-    def infer_paths(self, announce: Announcement):
+    def infer_paths(
+            self, announce: Announcement,
+            stop_at_target_asn: Optional[int] = None,
+            stop_at_target_count: int = 2
+    ):
         """Infer all AS-paths tied for best toward announcement sources.
 
         This function performs a modified breadth-first search traversing peering links
@@ -225,6 +229,10 @@ class ASGraph:
         This function can only be called once, as it adds metadata to self.g nodes and
         edges. To infer AS-paths for multiple announcements, consider cloning the graph
         with ASGraph.clone().
+
+        When `stop_at_target_asn` is given, the simulation of the announcement will
+        terminate once `stop_at_target_count` routes have been found. This is useful
+        if you only want to specifically find a route between two ASes.
         """
 
         assert self.announce is None
@@ -237,6 +245,11 @@ class ASGraph:
             self.make_announcements(pref)
             edge = self.workqueue.get(pref)
             while edge:
+                if stop_at_target_asn is not None and \
+                   len(self.g.nodes[stop_at_target_asn][NODE_BEST_PATHS]) \
+                   > stop_at_target_count:
+                    break
+
                 exporter, importer = edge
                 if InferenceCallback.VISIT_EDGE in self.callbacks:
                     self.callbacks[InferenceCallback.VISIT_EDGE](

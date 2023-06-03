@@ -34,7 +34,7 @@ def compute_likely_paths(source: int, sink: int) -> List[Tuple[int]]:
     announcement = Announcement.make_anycast_announcement(graph, [ source ])
     before = time.time()
     print(f'Computing likely paths to AS{source} on the internet...')
-    graph.infer_paths(announcement)
+    graph.infer_paths(announcement, stop_at_target_asn=sink)
     print(f'Done computing paths, took {round(time.time() - before, 3)}s')
 
     return graph.g.nodes[sink][NODE_BEST_PATHS]
