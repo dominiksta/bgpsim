@@ -3,17 +3,24 @@ from __future__ import annotations
 import bz2
 from collections import defaultdict, Counter
 import copy
-import dataclasses
+import dataclasses as dc
 import enum
 import logging
-from typing import Callable, Mapping, Optional, Sequence, Tuple, Union
+from typing import Callable, List, Mapping, Optional, Sequence, Tuple, Union
 
 import networkx as nx
 
+@dc.dataclass
+class NodeAccouncementData():
+    path_pref: dict[int, PathPref] = dc.field(
+        default_factory=lambda: defaultdict(lambda: PathPref.UNKNOWN)
+    )
+    best_paths: dict[int, List[List[int]]] = dc.field(
+        default_factory=lambda: defaultdict(list)
+    )
+    path_len: dict[int, int] = dc.field(default_factory=dict)
 
-NODE_PATH_PREF = "path-pref"
-NODE_BEST_PATHS = "best-paths"
-NODE_PATH_LEN = "path-len"
+
 NODE_IMPORT_FILTER = "import-filter"
 EDGE_REL = "edge-attr-relationship"
 
@@ -91,7 +98,7 @@ class InferenceCallback(enum.Enum):
     VISIT_EDGE = "visit-edge"
 
 
-@dataclasses.dataclass
+@dc.dataclass
 class Announcement:
     """Specification of a prefix announcement.
 
@@ -102,14 +109,14 @@ class Announcement:
     AS-path poisoning.
     """
 
-    source2neighbor2path: Mapping[int, Mapping[int, Tuple[int]]]
+    source2neighbor2path: Mapping[int, Mapping[int, List[int]]]
 
     @staticmethod
     def make_anycast_announcement(asgraph: ASGraph, sources: Sequence[int]):
         """Make announcement from sources to all neighbors without prepending."""
-        src2nei2path = dict()
+        src2nei2path: dict[int, dict[int, List[int]]] = dict()
         for src in sources:
-            src2nei2path[src] = {nei: () for nei in asgraph.g[src]}
+            src2nei2path[src] = {nei: [] for nei in asgraph.g[src]}
         return Announcement(src2nei2path)
 
 
@@ -131,23 +138,23 @@ class WorkQueue:
             del self.pref2depth2edge[pref][depth]
         return edge
 
-    def add_work(self, graph: ASGraph, exporter: int) -> None:
+    def add_work(self, graph: ASGraph, node_ann: NodeAccouncementData, exporter: int) -> None:
         """Add work to forward paths at importer to downstream ASes"""
-        pref = graph.g.nodes[exporter][NODE_PATH_PREF]
+        pref = node_ann.path_pref[exporter]
         for downstream in graph.g[exporter]:
             downstream_pref = PathPref.from_relationship(graph, exporter, downstream)
             if pref == PathPref.CUSTOMER or downstream_pref == PathPref.PROVIDER:
-                depth = graph.g.nodes[exporter][NODE_PATH_LEN]
+                depth = node_ann.path_len[exporter]
                 edge = (exporter, downstream)
                 self.pref2depth2edge[downstream_pref][depth].append(edge)
 
-    def check_work(self, graph: ASGraph, exporter: int) -> bool:
+    def check_work(self, graph: ASGraph, node_ann: NodeAccouncementData, exporter: int) -> bool:
         """Check all neighbors importing from exporter are in work queue"""
-        pref = graph.g.nodes[exporter][NODE_PATH_PREF]
+        pref = node_ann.path_pref[exporter]
         for downstream in graph.g[exporter]:
             downstream_pref = PathPref.from_relationship(graph, exporter, downstream)
             if pref == PathPref.CUSTOMER or downstream_pref == PathPref.PROVIDER:
-                depth = graph.g.nodes[exporter][NODE_PATH_LEN]
+                depth = node_ann.path_len[exporter]
                 edge = (exporter, downstream)
                 assert edge in self.pref2depth2edge[downstream_pref][depth]
         return True
@@ -157,20 +164,16 @@ class ASGraph:
     def __init__(self):
         self.g = nx.DiGraph()
         self.workqueue = WorkQueue()
-        self.announce = None
+        self.announce: Optional[Announcement] = None
         self.callbacks = dict()
 
     def add_peering(self, source: int, sink: int, relationship: Relationship) -> None:
         """Add nodes and edges corresponding to a peering relationship."""
         if source not in self.g:
             self.g.add_node(source)
-            self.g.nodes[source][NODE_BEST_PATHS] = list()
-            self.g.nodes[source][NODE_PATH_PREF] = PathPref.UNKNOWN
             self.g.nodes[source][NODE_IMPORT_FILTER] = None
         if sink not in self.g:
             self.g.add_node(sink)
-            self.g.nodes[sink][NODE_BEST_PATHS] = list()
-            self.g.nodes[sink][NODE_PATH_PREF] = PathPref.UNKNOWN
             self.g.nodes[sink][NODE_IMPORT_FILTER] = None
         self.g.add_edge(source, sink)
         self.g[source][sink][EDGE_REL] = Relationship(relationship)
@@ -208,8 +211,9 @@ class ASGraph:
     def infer_paths(
             self, announce: Announcement,
             stop_at_target_asn: Optional[int] = None,
-            stop_at_target_count: int = 2
-    ):
+            stop_at_target_count: int = 2,
+            initial_node_announcement_data: Optional[NodeAccouncementData] = None,
+    ) -> NodeAccouncementData:
         """Infer all AS-paths tied for best toward announcement sources.
 
         This function performs a modified breadth-first search traversing peering links
@@ -226,27 +230,31 @@ class ASGraph:
         care about whether the provider routes traverse a P2P or any number of C2P
         links.
 
-        This function can only be called once, as it adds metadata to self.g nodes and
-        edges. To infer AS-paths for multiple announcements, consider cloning the graph
-        with ASGraph.clone().
-
         When `stop_at_target_asn` is given, the simulation of the announcement will
         terminate once `stop_at_target_count` routes have been found. This is useful
         if you only want to specifically find a route between two ASes.
+
+        The `initial_node_announcement_data` parameter is mostly intended for testing
+        purposes where it is desirable to have the ability to manually program in some
+        existing paths before simulating an announcement.
+
+        The method will RETURN a NodeAnnouncementData object which can be queried for
+        data about the simulated announcement, e.g. the best paths to the source ASes
+        in the announcements.
         """
 
-        assert self.announce is None
         self.check_announcement(announce)
         self.announce = announce
+        node_ann = NodeAccouncementData()
 
         for pref in [PathPref.CUSTOMER, PathPref.PEER, PathPref.PROVIDER]:
             if InferenceCallback.START_RELATIONSHIP_PHASE in self.callbacks:
                 self.callbacks[InferenceCallback.START_RELATIONSHIP_PHASE](pref)
-            self.make_announcements(pref)
+            self.make_announcements(pref, node_ann)
             edge = self.workqueue.get(pref)
             while edge:
                 if stop_at_target_asn is not None and \
-                   len(self.g.nodes[stop_at_target_asn][NODE_BEST_PATHS]) \
+                   len(node_ann.best_paths[stop_at_target_asn]) \
                    > stop_at_target_count:
                     break
 
@@ -260,11 +268,13 @@ class ASGraph:
                     edge = self.workqueue.get(pref)
                     continue
                 assert PathPref.from_relationship(self, exporter, importer) == pref
-                if self.update_paths(exporter, importer):
-                    self.workqueue.add_work(self, importer)
+                if self.update_paths(node_ann, exporter, importer):
+                    self.workqueue.add_work(self, node_ann, importer)
                 edge = self.workqueue.get(pref)
 
-    def make_announcements(self, pref: PathPref) -> None:
+        return node_ann
+
+    def make_announcements(self, pref: PathPref, node_ann: NodeAccouncementData) -> None:
         """Initialize paths with given pref at neighbors according to announcement."""
 
         # We sort the calls to update_paths() by path length as update_paths() does not
@@ -286,11 +296,15 @@ class ASGraph:
             length = min(len2srcs.keys())
             for src in len2srcs[length]:
                 announce_path = self.announce.source2neighbor2path[src][nei]
-                if self.update_paths(src, nei, announce_path):
-                    self.workqueue.add_work(self, nei)
+                # Everything in this method before this point was just to discard
+                # paths in the announcement longer than the shortest. This is the
+                # actual work/side effect:
+                if self.update_paths(node_ann, src, nei, announce_path):
+                    self.workqueue.add_work(self, node_ann, nei)
 
     def update_paths(
-        self, exporter: int, importer: int, announce_path: Tuple[int] = None
+            self, node_ann: NodeAccouncementData, exporter: int, importer: int,
+            announce_path: List[int] = None,
     ) -> bool:
         """Check for new paths or add paths tied for best at importer.
 
@@ -304,7 +318,7 @@ class ASGraph:
         """
         node = self.g.nodes[importer]
         new_pref = PathPref.from_relationship(self, exporter, importer)
-        current_pref = node[NODE_PATH_PREF]
+        current_pref = node_ann.path_pref[importer]
 
         assert current_pref >= new_pref or current_pref == PathPref.UNKNOWN
 
@@ -314,10 +328,10 @@ class ASGraph:
         new_paths = None
         if announce_path is not None:
             assert importer not in announce_path
-            new_paths = [(exporter,) + announce_path]
+            new_paths = [[exporter] + announce_path]
         else:
-            exported_paths = self.g.nodes[exporter][NODE_BEST_PATHS]
-            new_paths = [(exporter,) + p for p in exported_paths if importer not in p]
+            exported_paths = node_ann.best_paths[exporter]
+            new_paths = [[exporter] + p for p in exported_paths if importer not in p]
 
         if node[NODE_IMPORT_FILTER] is not None:
             func, data = node[NODE_IMPORT_FILTER]
@@ -328,12 +342,12 @@ class ASGraph:
         new_path_len = len(new_paths[0])
 
         if current_pref == PathPref.UNKNOWN:
-            self.g.nodes[importer][NODE_BEST_PATHS] = new_paths
-            self.g.nodes[importer][NODE_PATH_LEN] = new_path_len
-            self.g.nodes[importer][NODE_PATH_PREF] = new_pref
+            node_ann.best_paths[importer] = new_paths
+            node_ann.path_len[importer] = new_path_len
+            node_ann.path_pref[importer] = new_pref
             return True
 
-        current_path_len = self.g.nodes[importer][NODE_PATH_LEN]
+        current_path_len = node_ann.path_len[importer]
         assert current_pref == new_pref
         assert new_path_len >= current_path_len
         assert [
@@ -341,19 +355,11 @@ class ASGraph:
         ].count(False) == 0
 
         if new_path_len == current_path_len:
-            self.g.nodes[importer][NODE_BEST_PATHS].extend(new_paths)
-            assert self.workqueue.check_work(self, importer)
+            node_ann.best_paths[importer].extend(new_paths)
+            assert self.workqueue.check_work(self, node_ann, importer)
 
         return False
 
-    def clone(self):
-        """Return a deep copy of the current ASGraph."""
-        assert self.announce is None
-        graph = ASGraph()
-        graph.g = copy.deepcopy(self.g)
-        graph.workqueue = WorkQueue()
-        graph.announce = None
-        return graph
 
     @staticmethod
     def read_caida_asrel_graph(filepath):

@@ -1,9 +1,11 @@
 import os
 import random
 import sys
+from time import time
 import timeit
 import urllib.parse
 import urllib.request
+import hashlib
 
 sys.path.append(os.getcwd())
 from bgpsim import (
@@ -17,10 +19,13 @@ CAIDA_AS_RELATIONSHIPS_URL = (
 
 
 def random_inference(graph: ASGraph):
+    now = time()
+    id = hashlib.md5(str(now).encode()).hexdigest()
     sources = random.sample(graph.g.nodes, 2)
     announce = Announcement.make_anycast_announcement(graph, sources)
-    g1 = graph.clone()
-    g1.infer_paths(announce)
+    print(f'Inference {id} {sources}:  starting')
+    graph.infer_paths(announce)
+    print(f'Inference {id} {sources}: done, after {round(time() - now, 2)}s')
 
 
 def bench():
