@@ -9,13 +9,13 @@ import urllib.request
 from bgpsim import (
     Announcement,
     ASGraph,
+    NodeAccouncementData,
     PathPref,
     Relationship,
     WorkQueue,
     EDGE_REL,
     NODE_BEST_PATHS,
     NODE_PATH_LEN,
-    NODE_PATH_PREF,
 )
 
 
@@ -197,7 +197,7 @@ class TestPathPref(unittest.TestCase):
 
     def test_from_relationship(self):
         graph = _make_graph_implicit_withdrawal()
-        for src, snk, relationship in graph.g.edges.data(EDGE_REL):
+        for src, snk, relationship in graph.g.edges.data(EDGE_REL): # type: ignore
             if relationship == Relationship.P2C:
                 pref = PathPref.from_relationship(graph, src, snk)
                 self.assertEqual(pref, PathPref.PROVIDER)
@@ -250,15 +250,16 @@ class TestWorkQueue(unittest.TestCase):
     def setUp(self):
         # Preconfigure paths for 3 and 7, with longer AS-paths at 7:
         self.graph = _make_graph_implicit_withdrawal()
+        self.node_ann = NodeAccouncementData()
         self.graph.g.nodes[3][NODE_BEST_PATHS] = [()]
         self.graph.g.nodes[3][NODE_PATH_LEN] = 0
-        self.graph.g.nodes[3][NODE_PATH_PREF] = PathPref.CUSTOMER
+        self.node_ann.path_pref[3] = PathPref.CUSTOMER
         self.graph.g.nodes[7][NODE_BEST_PATHS] = [(7, 7)]
         self.graph.g.nodes[7][NODE_PATH_LEN] = 2
-        self.graph.g.nodes[7][NODE_PATH_PREF] = PathPref.CUSTOMER
+        self.node_ann.path_pref[7] = PathPref.CUSTOMER
         self.workqueue = WorkQueue()
-        self.workqueue.add_work(self.graph, 3)
-        self.workqueue.add_work(self.graph, 7)
+        self.workqueue.add_work(self.graph, self.node_ann, 3)
+        self.workqueue.add_work(self.graph, self.node_ann, 7)
 
     def test_add_work(self):
         pref2depth2edge = self.workqueue.pref2depth2edge
@@ -287,81 +288,81 @@ class TestASGraph(unittest.TestCase):
         g1 = graph.clone()
 
         announce = Announcement.make_anycast_announcement(graph, [10])
-        graph.infer_paths(announce)
+        node_ann = graph.infer_paths(announce)
         self.assertListEqual(graph.g.nodes[8][NODE_BEST_PATHS], [(6, 4, 1, 10)])
-        self.assertEqual(graph.g.nodes[8][NODE_PATH_PREF], PathPref.PROVIDER)
+        self.assertEqual(node_ann.path_pref[8], PathPref.PROVIDER)
         self.assertListEqual(graph.g.nodes[3][NODE_BEST_PATHS], [(2, 5, 7, 9, 10)])
-        self.assertEqual(graph.g.nodes[3][NODE_PATH_PREF], PathPref.PEER)
+        self.assertEqual(node_ann.path_pref[3], PathPref.PEER)
         self.assertListEqual(graph.g.nodes[1][NODE_BEST_PATHS], [(10,)])
-        self.assertEqual(graph.g.nodes[1][NODE_PATH_PREF], PathPref.CUSTOMER)
+        self.assertEqual(node_ann.path_pref[1], PathPref.CUSTOMER)
 
         announce = Announcement.make_anycast_announcement(g1, [4])
-        g1.infer_paths(announce)
+        node_ann = g1.infer_paths(announce)
         self.assertListEqual(g1.g.nodes[8][NODE_BEST_PATHS], [(6, 4)])
-        self.assertEqual(g1.g.nodes[8][NODE_PATH_PREF], PathPref.PROVIDER)
+        self.assertEqual(node_ann.path_pref[8], PathPref.PROVIDER)
         self.assertListEqual(g1.g.nodes[3][NODE_BEST_PATHS], [(1, 4)])
-        self.assertEqual(g1.g.nodes[3][NODE_PATH_PREF], PathPref.PROVIDER)
+        self.assertEqual(node_ann.path_pref[3], PathPref.PROVIDER)
         self.assertListEqual(g1.g.nodes[10][NODE_BEST_PATHS], [(1, 4)])
-        self.assertEqual(g1.g.nodes[10][NODE_PATH_PREF], PathPref.PROVIDER)
-        self.assertEqual(g1.g.nodes[2][NODE_PATH_PREF], PathPref.UNKNOWN)
-        self.assertEqual(g1.g.nodes[5][NODE_PATH_PREF], PathPref.UNKNOWN)
-        self.assertEqual(g1.g.nodes[7][NODE_PATH_PREF], PathPref.UNKNOWN)
-        self.assertEqual(g1.g.nodes[9][NODE_PATH_PREF], PathPref.UNKNOWN)
+        self.assertEqual(node_ann.path_pref[10], PathPref.PROVIDER)
+        self.assertEqual(node_ann.path_pref[2], PathPref.UNKNOWN)
+        self.assertEqual(node_ann.path_pref[5], PathPref.UNKNOWN)
+        self.assertEqual(node_ann.path_pref[7], PathPref.UNKNOWN)
+        self.assertEqual(node_ann.path_pref[9], PathPref.UNKNOWN)
 
     def test_implicit_withdrawal_multihop(self):
         graph = _make_graph_implicit_withdrawal_multihop()
         g1 = graph.clone()
 
         announce = Announcement.make_anycast_announcement(graph, [10])
-        graph.infer_paths(announce)
+        node_ann = graph.infer_paths(announce)
         self.assertListEqual(graph.g.nodes[11][NODE_BEST_PATHS], [(2, 10)])
-        self.assertEqual(graph.g.nodes[11][NODE_PATH_PREF], PathPref.CUSTOMER)
+        self.assertEqual(node_ann.path_pref[11], PathPref.CUSTOMER)
         self.assertListEqual(graph.g.nodes[4][NODE_BEST_PATHS], [(3, 11, 2, 10)])
-        self.assertEqual(graph.g.nodes[4][NODE_PATH_PREF], PathPref.PROVIDER)
+        self.assertEqual(node_ann.path_pref[4], PathPref.PROVIDER)
         self.assertListEqual(graph.g.nodes[12][NODE_BEST_PATHS], [(2, 10)])
-        self.assertEqual(graph.g.nodes[12][NODE_PATH_PREF], PathPref.PROVIDER)
+        self.assertEqual(node_ann.path_pref[12], PathPref.PROVIDER)
         self.assertListEqual(graph.g.nodes[1][NODE_BEST_PATHS], [(10,)])
-        self.assertEqual(graph.g.nodes[1][NODE_PATH_PREF], PathPref.CUSTOMER)
+        self.assertEqual(node_ann.path_pref[1], PathPref.CUSTOMER)
 
         announce = Announcement.make_anycast_announcement(g1, [2])
-        g1.infer_paths(announce)
+        node_ann = g1.infer_paths(announce)
         self.assertListEqual(g1.g.nodes[11][NODE_BEST_PATHS], [(2,)])
-        self.assertEqual(g1.g.nodes[11][NODE_PATH_PREF], PathPref.CUSTOMER)
+        self.assertEqual(node_ann.path_pref[11], PathPref.CUSTOMER)
         self.assertListEqual(g1.g.nodes[4][NODE_BEST_PATHS], [(3, 11, 2)])
-        self.assertEqual(g1.g.nodes[4][NODE_PATH_PREF], PathPref.PROVIDER)
+        self.assertEqual(node_ann.path_pref[4], PathPref.PROVIDER)
         self.assertListEqual(g1.g.nodes[12][NODE_BEST_PATHS], [(2,)])
-        self.assertEqual(g1.g.nodes[12][NODE_PATH_PREF], PathPref.PROVIDER)
+        self.assertEqual(node_ann.path_pref[12], PathPref.PROVIDER)
         self.assertListEqual(g1.g.nodes[1][NODE_BEST_PATHS], [(11, 2)])
-        self.assertEqual(g1.g.nodes[1][NODE_PATH_PREF], PathPref.PEER)
+        self.assertEqual(node_ann.path_pref[1], PathPref.PEER)
 
     def test_preferred(self):
         graph = _make_graph_preferred()
         announce = Announcement.make_anycast_announcement(graph, [4])
-        graph.infer_paths(announce)
+        node_ann = graph.infer_paths(announce)
         self.assertListEqual(graph.g.nodes[3][NODE_BEST_PATHS], [(2, 4)])
-        self.assertEqual(graph.g.nodes[3][NODE_PATH_PREF], PathPref.PEER)
+        self.assertEqual(node_ann.path_pref[3], PathPref.PEER)
         self.assertListEqual(graph.g.nodes[5][NODE_BEST_PATHS], [(1, 4)])
-        self.assertEqual(graph.g.nodes[5][NODE_PATH_PREF], PathPref.PEER)
+        self.assertEqual(node_ann.path_pref[5], PathPref.PEER)
         self.assertListEqual(graph.g.nodes[6][NODE_BEST_PATHS], [(4,)])
-        self.assertEqual(graph.g.nodes[6][NODE_PATH_PREF], PathPref.PROVIDER)
+        self.assertEqual(node_ann.path_pref[6], PathPref.PROVIDER)
 
     def test_multiple_choices_from_provider(self):
         graph = _make_graph_multiple_choices()
         announce = Announcement.make_anycast_announcement(graph, [1])
-        graph.infer_paths(announce)
+        node_ann = graph.infer_paths(announce)
 
-        self.assertEqual(graph.g.nodes[6][NODE_PATH_PREF], PathPref.UNKNOWN)
-        self.assertEqual(graph.g.nodes[7][NODE_PATH_PREF], PathPref.UNKNOWN)
-        self.assertEqual(graph.g.nodes[12][NODE_PATH_PREF], PathPref.UNKNOWN)
-        self.assertEqual(graph.g.nodes[13][NODE_PATH_PREF], PathPref.UNKNOWN)
+        self.assertEqual(node_ann.path_pref[6], PathPref.UNKNOWN)
+        self.assertEqual(node_ann.path_pref[7], PathPref.UNKNOWN)
+        self.assertEqual(node_ann.path_pref[12], PathPref.UNKNOWN)
+        self.assertEqual(node_ann.path_pref[13], PathPref.UNKNOWN)
 
         as5_paths = [(2, 1), (3, 1), (4, 1)]
         self.assertCountEqual(graph.g.nodes[5][NODE_BEST_PATHS], as5_paths)
-        self.assertEqual(graph.g.nodes[5][NODE_PATH_PREF], PathPref.PROVIDER)
+        self.assertEqual(node_ann.path_pref[5], PathPref.PROVIDER)
 
         as8_paths = [(5, 2, 1), (5, 3, 1), (5, 4, 1)]
         self.assertCountEqual(graph.g.nodes[8][NODE_BEST_PATHS], as8_paths)
-        self.assertEqual(graph.g.nodes[8][NODE_PATH_PREF], PathPref.PROVIDER)
+        self.assertEqual(node_ann.path_pref[8], PathPref.PROVIDER)
 
         as11_paths = [
             (8, 5, 2, 1),
@@ -379,11 +380,11 @@ class TestASGraph(unittest.TestCase):
     def test_multiple_choices_from_customer(self):
         graph = _make_graph_multiple_choices()
         announce = Announcement.make_anycast_announcement(graph, [11])
-        graph.infer_paths(announce)
+        node_ann = graph.infer_paths(announce)
 
         as13_paths = [(12, 10, 11), (12, 9, 11), (12, 8, 11)]
         self.assertCountEqual(graph.g.nodes[13][NODE_BEST_PATHS], as13_paths)
-        self.assertEqual(graph.g.nodes[13][NODE_PATH_PREF], PathPref.PROVIDER)
+        self.assertEqual(node_ann.path_pref[13], PathPref.PROVIDER)
 
         as7_paths = [
             (6, 2, 5, 10, 11),
@@ -397,7 +398,7 @@ class TestASGraph(unittest.TestCase):
             (6, 4, 5, 8, 11),
         ]
         self.assertCountEqual(graph.g.nodes[7][NODE_BEST_PATHS], as7_paths)
-        self.assertEqual(graph.g.nodes[7][NODE_PATH_PREF], PathPref.PROVIDER)
+        self.assertEqual(node_ann.path_pref[7], PathPref.PROVIDER)
 
         as1_paths = [
             (2, 5, 10, 11),
@@ -411,24 +412,24 @@ class TestASGraph(unittest.TestCase):
             (4, 5, 8, 11),
         ]
         self.assertCountEqual(graph.g.nodes[1][NODE_BEST_PATHS], as1_paths)
-        self.assertEqual(graph.g.nodes[1][NODE_PATH_PREF], PathPref.CUSTOMER)
+        self.assertEqual(node_ann.path_pref[1], PathPref.CUSTOMER)
 
     def test_multiple_provider_sources(self):
         graph = _make_graph_multiple_choices()
         announce = Announcement.make_anycast_announcement(graph, [2, 4])
-        graph.infer_paths(announce)
+        node_ann = graph.infer_paths(announce)
 
         as1_paths = [(2,), (4,)]
         self.assertCountEqual(graph.g.nodes[1][NODE_BEST_PATHS], as1_paths)
-        self.assertEqual(graph.g.nodes[1][NODE_PATH_PREF], PathPref.CUSTOMER)
+        self.assertEqual(node_ann.path_pref[1], PathPref.CUSTOMER)
 
         as3_paths = [(1, 4), (1, 2)]
         self.assertCountEqual(graph.g.nodes[3][NODE_BEST_PATHS], as3_paths)
-        self.assertEqual(graph.g.nodes[3][NODE_PATH_PREF], PathPref.PROVIDER)
+        self.assertEqual(node_ann.path_pref[3], PathPref.PROVIDER)
 
         as7_paths = [(6, 4), (6, 2)]
         self.assertCountEqual(graph.g.nodes[7][NODE_BEST_PATHS], as7_paths)
-        self.assertEqual(graph.g.nodes[7][NODE_PATH_PREF], PathPref.PROVIDER)
+        self.assertEqual(node_ann.path_pref[7], PathPref.PROVIDER)
 
         as11_paths = [
             (8, 5, 4),
@@ -439,52 +440,52 @@ class TestASGraph(unittest.TestCase):
             (10, 5, 2),
         ]
         self.assertCountEqual(graph.g.nodes[11][NODE_BEST_PATHS], as11_paths)
-        self.assertEqual(graph.g.nodes[11][NODE_PATH_PREF], PathPref.PROVIDER)
+        self.assertEqual(node_ann.path_pref[11], PathPref.PROVIDER)
 
-        self.assertEqual(graph.g.nodes[12][NODE_PATH_PREF], PathPref.UNKNOWN)
-        self.assertEqual(graph.g.nodes[13][NODE_PATH_PREF], PathPref.UNKNOWN)
+        self.assertEqual(node_ann.path_pref[12], PathPref.UNKNOWN)
+        self.assertEqual(node_ann.path_pref[13], PathPref.UNKNOWN)
 
     def test_multiple_provider_sources_prepend(self):
         graph = _make_graph_multiple_choices()
         announce = Announcement.make_anycast_announcement(graph, [2, 4])
-        announce.source2neighbor2path[2][5] = (2,)
-        graph.infer_paths(announce)
+        announce.source2neighbor2path[2][5] = (2,) # type: ignore
+        node_ann = graph.infer_paths(announce)
 
         as1_paths = [(2,), (4,)]
         self.assertCountEqual(graph.g.nodes[1][NODE_BEST_PATHS], as1_paths)
-        self.assertEqual(graph.g.nodes[1][NODE_PATH_PREF], PathPref.CUSTOMER)
+        self.assertEqual(node_ann.path_pref[1], PathPref.CUSTOMER)
 
         as3_paths = [(1, 4), (1, 2)]
         self.assertCountEqual(graph.g.nodes[3][NODE_BEST_PATHS], as3_paths)
-        self.assertEqual(graph.g.nodes[3][NODE_PATH_PREF], PathPref.PROVIDER)
+        self.assertEqual(node_ann.path_pref[3], PathPref.PROVIDER)
 
         as7_paths = [(6, 4), (6, 2)]
         self.assertCountEqual(graph.g.nodes[7][NODE_BEST_PATHS], as7_paths)
-        self.assertEqual(graph.g.nodes[7][NODE_PATH_PREF], PathPref.PROVIDER)
+        self.assertEqual(node_ann.path_pref[7], PathPref.PROVIDER)
 
         as11_paths = [(8, 5, 4), (9, 5, 4), (10, 5, 4)]
         self.assertCountEqual(graph.g.nodes[11][NODE_BEST_PATHS], as11_paths)
-        self.assertEqual(graph.g.nodes[11][NODE_PATH_PREF], PathPref.PROVIDER)
+        self.assertEqual(node_ann.path_pref[11], PathPref.PROVIDER)
 
-        self.assertEqual(graph.g.nodes[12][NODE_PATH_PREF], PathPref.UNKNOWN)
-        self.assertEqual(graph.g.nodes[13][NODE_PATH_PREF], PathPref.UNKNOWN)
+        self.assertEqual(node_ann.path_pref[12], PathPref.UNKNOWN)
+        self.assertEqual(node_ann.path_pref[13], PathPref.UNKNOWN)
 
     def test_multiple_customer_sources(self):
         graph = _make_graph_multiple_choices()
         announce = Announcement.make_anycast_announcement(graph, [8, 10])
-        graph.infer_paths(announce)
+        node_ann = graph.infer_paths(announce)
 
         as11_paths = [(8,), (10,)]
         self.assertCountEqual(graph.g.nodes[11][NODE_BEST_PATHS], as11_paths)
-        self.assertEqual(graph.g.nodes[11][NODE_PATH_PREF], PathPref.PROVIDER)
+        self.assertEqual(node_ann.path_pref[11], PathPref.PROVIDER)
 
         as13_paths = [(12, 8), (12, 10)]
         self.assertCountEqual(graph.g.nodes[13][NODE_BEST_PATHS], as13_paths)
-        self.assertEqual(graph.g.nodes[13][NODE_PATH_PREF], PathPref.PROVIDER)
+        self.assertEqual(node_ann.path_pref[13], PathPref.PROVIDER)
 
         as9_paths = [(5, 8), (5, 10)]
         self.assertCountEqual(graph.g.nodes[9][NODE_BEST_PATHS], as9_paths)
-        self.assertEqual(graph.g.nodes[9][NODE_PATH_PREF], PathPref.PROVIDER)
+        self.assertEqual(node_ann.path_pref[9], PathPref.PROVIDER)
 
         as1_paths = [
             (2, 5, 8),
@@ -495,7 +496,7 @@ class TestASGraph(unittest.TestCase):
             (4, 5, 10),
         ]
         self.assertCountEqual(graph.g.nodes[1][NODE_BEST_PATHS], as1_paths)
-        self.assertEqual(graph.g.nodes[1][NODE_PATH_PREF], PathPref.CUSTOMER)
+        self.assertEqual(node_ann.path_pref[1], PathPref.CUSTOMER)
 
         as7_paths = [
             (6, 2, 5, 8),
@@ -506,63 +507,63 @@ class TestASGraph(unittest.TestCase):
             (6, 4, 5, 10),
         ]
         self.assertCountEqual(graph.g.nodes[7][NODE_BEST_PATHS], as7_paths)
-        self.assertEqual(graph.g.nodes[7][NODE_PATH_PREF], PathPref.PROVIDER)
+        self.assertEqual(node_ann.path_pref[7], PathPref.PROVIDER)
 
     def test_multiple_customer_sources_prepend(self):
         graph = _make_graph_multiple_choices()
         announce = Announcement.make_anycast_announcement(graph, [8, 10])
-        announce.source2neighbor2path[8][5] = (8,)
-        graph.infer_paths(announce)
+        announce.source2neighbor2path[8][5] = (8,) # type: ignore
+        node_ann = graph.infer_paths(announce)
 
         as11_paths = [(8,), (10,)]
         self.assertCountEqual(graph.g.nodes[11][NODE_BEST_PATHS], as11_paths)
-        self.assertEqual(graph.g.nodes[11][NODE_PATH_PREF], PathPref.PROVIDER)
+        self.assertEqual(node_ann.path_pref[11], PathPref.PROVIDER)
 
         as13_paths = [(12, 8), (12, 10)]
         self.assertCountEqual(graph.g.nodes[13][NODE_BEST_PATHS], as13_paths)
-        self.assertEqual(graph.g.nodes[13][NODE_PATH_PREF], PathPref.PROVIDER)
+        self.assertEqual(node_ann.path_pref[13], PathPref.PROVIDER)
 
         as9_paths = [(5, 10)]
         self.assertCountEqual(graph.g.nodes[9][NODE_BEST_PATHS], as9_paths)
-        self.assertEqual(graph.g.nodes[9][NODE_PATH_PREF], PathPref.PROVIDER)
+        self.assertEqual(node_ann.path_pref[9], PathPref.PROVIDER)
 
         as1_paths = [(2, 5, 10), (3, 5, 10), (4, 5, 10)]
         self.assertCountEqual(graph.g.nodes[1][NODE_BEST_PATHS], as1_paths)
-        self.assertEqual(graph.g.nodes[1][NODE_PATH_PREF], PathPref.CUSTOMER)
+        self.assertEqual(node_ann.path_pref[1], PathPref.CUSTOMER)
 
         as7_paths = [(6, 2, 5, 10), (6, 3, 5, 10), (6, 4, 5, 10)]
         self.assertCountEqual(graph.g.nodes[7][NODE_BEST_PATHS], as7_paths)
-        self.assertEqual(graph.g.nodes[7][NODE_PATH_PREF], PathPref.PROVIDER)
+        self.assertEqual(node_ann.path_pref[7], PathPref.PROVIDER)
 
     def test_peer_peer_relationships(self):
         graph = _make_graph_peer_peer_relationships()
         g1 = graph.clone()
 
         announce = Announcement.make_anycast_announcement(graph, [2])
-        graph.infer_paths(announce)
+        node_ann = graph.infer_paths(announce)
         self.assertListEqual(graph.g.nodes[9][NODE_BEST_PATHS], [(1, 2)])
-        self.assertEqual(graph.g.nodes[9][NODE_PATH_PREF], PathPref.CUSTOMER)
+        self.assertEqual(node_ann.path_pref[9], PathPref.CUSTOMER)
         self.assertListEqual(graph.g.nodes[6][NODE_BEST_PATHS], [(5, 9, 1, 2)])
-        self.assertEqual(graph.g.nodes[6][NODE_PATH_PREF], PathPref.PROVIDER)
+        self.assertEqual(node_ann.path_pref[6], PathPref.PROVIDER)
         self.assertListEqual(graph.g.nodes[4][NODE_BEST_PATHS], [(3, 1, 2)])
-        self.assertEqual(graph.g.nodes[4][NODE_PATH_PREF], PathPref.PROVIDER)
-        self.assertEqual(graph.g.nodes[7][NODE_PATH_PREF], PathPref.UNKNOWN)
-        self.assertEqual(graph.g.nodes[8][NODE_PATH_PREF], PathPref.UNKNOWN)
-        self.assertEqual(graph.g.nodes[10][NODE_PATH_PREF], PathPref.UNKNOWN)
+        self.assertEqual(node_ann.path_pref[4], PathPref.PROVIDER)
+        self.assertEqual(node_ann.path_pref[7], PathPref.UNKNOWN)
+        self.assertEqual(node_ann.path_pref[8], PathPref.UNKNOWN)
+        self.assertEqual(node_ann.path_pref[10], PathPref.UNKNOWN)
 
         announce = Announcement.make_anycast_announcement(g1, [4])
-        g1.infer_paths(announce)
+        node_ann = g1.infer_paths(announce)
         self.assertListEqual(g1.g.nodes[10][NODE_BEST_PATHS], [(3, 4)])
-        self.assertEqual(g1.g.nodes[10][NODE_PATH_PREF], PathPref.CUSTOMER)
+        self.assertEqual(node_ann.path_pref[10], PathPref.CUSTOMER)
         self.assertListEqual(g1.g.nodes[2][NODE_BEST_PATHS], [(1, 3, 4)])
-        self.assertEqual(g1.g.nodes[2][NODE_PATH_PREF], PathPref.PROVIDER)
+        self.assertEqual(node_ann.path_pref[2], PathPref.PROVIDER)
         self.assertListEqual(g1.g.nodes[6][NODE_BEST_PATHS], [(5, 3, 4)])
-        self.assertEqual(g1.g.nodes[6][NODE_PATH_PREF], PathPref.PROVIDER)
+        self.assertEqual(node_ann.path_pref[6], PathPref.PROVIDER)
         self.assertListEqual(g1.g.nodes[7][NODE_BEST_PATHS], [(10, 3, 4)])
-        self.assertEqual(g1.g.nodes[7][NODE_PATH_PREF], PathPref.PROVIDER)
+        self.assertEqual(node_ann.path_pref[7], PathPref.PROVIDER)
         self.assertListEqual(g1.g.nodes[8][NODE_BEST_PATHS], [(7, 10, 3, 4)])
-        self.assertEqual(g1.g.nodes[8][NODE_PATH_PREF], PathPref.PROVIDER)
-        self.assertEqual(g1.g.nodes[9][NODE_PATH_PREF], PathPref.UNKNOWN)
+        self.assertEqual(node_ann.path_pref[8], PathPref.PROVIDER)
+        self.assertEqual(node_ann.path_pref[9], PathPref.UNKNOWN)
 
     def test_diamond_exhaustive(self):
         def make_three_way_diamond(relationship_combination):
@@ -578,7 +579,7 @@ class TestASGraph(unittest.TestCase):
         for relationship_combination in itertools.product(Relationship, repeat=6):
             graph = make_three_way_diamond(relationship_combination)
             announce = Announcement.make_anycast_announcement(graph, [1])
-            graph.infer_paths(announce)
+            node_ann = graph.infer_paths(announce)
 
             as5_paths = list()
             best_pref = PathPref.UNKNOWN
@@ -597,38 +598,38 @@ class TestASGraph(unittest.TestCase):
                 best_pref = max(best_pref, as5_pref)
 
             self.assertCountEqual(graph.g.nodes[5][NODE_BEST_PATHS], as5_paths)
-            self.assertEqual(graph.g.nodes[5][NODE_PATH_PREF], best_pref)
+            self.assertEqual(node_ann.path_pref[5], best_pref)
 
     def test_peer_lock(self):
         graph = _make_graph_peer_lock()
 
         announce = Announcement.make_anycast_announcement(graph, [1, 7])
-        graph.infer_paths(announce)
+        node_ann = graph.infer_paths(announce)
 
         self.assertCountEqual(graph.g.nodes[2][NODE_BEST_PATHS], [(1,)])
-        self.assertEqual(graph.g.nodes[2][NODE_PATH_PREF], PathPref.PEER)
+        self.assertEqual(node_ann.path_pref[2], PathPref.PEER)
         self.assertCountEqual(graph.g.nodes[4][NODE_BEST_PATHS], [(1,)])
-        self.assertEqual(graph.g.nodes[4][NODE_PATH_PREF], PathPref.CUSTOMER)
+        self.assertEqual(node_ann.path_pref[4], PathPref.CUSTOMER)
 
         self.assertCountEqual(graph.g.nodes[3][NODE_BEST_PATHS], [(7,)])
-        self.assertEqual(graph.g.nodes[3][NODE_PATH_PREF], PathPref.CUSTOMER)
+        self.assertEqual(node_ann.path_pref[3], PathPref.CUSTOMER)
         self.assertCountEqual(graph.g.nodes[5][NODE_BEST_PATHS], [(7,), (1,)])
-        self.assertEqual(graph.g.nodes[5][NODE_PATH_PREF], PathPref.CUSTOMER)
+        self.assertEqual(node_ann.path_pref[5], PathPref.CUSTOMER)
 
         self.assertCountEqual(
             graph.g.nodes[6][NODE_BEST_PATHS], [(2, 1), (4, 1), (3, 7), (5, 7), (5, 1)]
         )
-        self.assertEqual(graph.g.nodes[6][NODE_PATH_PREF], PathPref.PROVIDER)
+        self.assertEqual(node_ann.path_pref[6], PathPref.PROVIDER)
 
         self.assertCountEqual(
             graph.g.nodes[8][NODE_BEST_PATHS], [(4, 1), (3, 7), (5, 7), (5, 1)]
         )
-        self.assertEqual(graph.g.nodes[8][NODE_PATH_PREF], PathPref.PEER)
+        self.assertEqual(node_ann.path_pref[8], PathPref.PEER)
 
         self.assertCountEqual(
             graph.g.nodes[9][NODE_BEST_PATHS], [(4, 1), (3, 7), (5, 7), (5, 1)]
         )
-        self.assertEqual(graph.g.nodes[9][NODE_PATH_PREF], PathPref.CUSTOMER)
+        self.assertEqual(node_ann.path_pref[9], PathPref.CUSTOMER)
 
 
 def workqueue_random_get(self, pref):
@@ -674,19 +675,19 @@ class TestCaidaASGraph(unittest.TestCase):
             self.assertCountEqual(announce.source2neighbor2path.keys(), sources)
 
             g1 = self.graph.clone()
-            g1.infer_paths(announce)
+            node_ann1 = g1.infer_paths(announce)
 
             for iternum in range(ITERATIONS):
                 print(f"source set {setnum}/{SETS}, iteration {iternum}/{ITERATIONS}")
 
                 g2 = self.graph.clone()
-                g2.infer_paths(announce)
+                node_ann2 = g2.infer_paths(announce)
 
                 for nodenum in g1.g.nodes:
                     n1_paths = g1.g.nodes[nodenum][NODE_BEST_PATHS]
                     n2_paths = g2.g.nodes[nodenum][NODE_BEST_PATHS]
                     self.assertCountEqual(n1_paths, n2_paths)
                     self.assertEqual(
-                        g1.g.nodes[nodenum][NODE_PATH_PREF],
-                        g2.g.nodes[nodenum][NODE_PATH_PREF],
+                        node_ann1.path_pref[nodenum],
+                        node_ann2.path_pref[nodenum],
                     )
