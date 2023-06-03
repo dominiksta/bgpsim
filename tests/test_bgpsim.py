@@ -236,7 +236,7 @@ class TestAnnouncement(unittest.TestCase):
                 neighbor2path = announce.source2neighbor2path[source]
                 self.assertEqual(set(graph.g[source]), set(neighbor2path.keys()))
                 for aspath in neighbor2path.values():
-                    self.assertEqual(aspath, ())
+                    self.assertEqual(aspath, [])
 
         graph = _make_graph_implicit_withdrawal()
         test_sets = [[1, 10], [2, 3], [7, 6, 2], [1, 2, 7, 9, 8]]
@@ -249,10 +249,10 @@ class TestWorkQueue(unittest.TestCase):
         # Preconfigure paths for 3 and 7, with longer AS-paths at 7:
         self.graph = _make_graph_implicit_withdrawal()
         self.node_ann = NodeAccouncementData()
-        self.node_ann.best_paths[3] = [()]
+        self.node_ann.best_paths[3] = [[]]
         self.node_ann.path_len[3] = 0
         self.node_ann.path_pref[3] = PathPref.CUSTOMER
-        self.node_ann.best_paths[7] = [(7, 7)]
+        self.node_ann.best_paths[7] = [[ 7, 7 ]]
         self.node_ann.path_len[7] = 2
         self.node_ann.path_pref[7] = PathPref.CUSTOMER
         self.workqueue = WorkQueue()
@@ -287,20 +287,20 @@ class TestASGraph(unittest.TestCase):
 
         announce = Announcement.make_anycast_announcement(graph, [10])
         node_ann = graph.infer_paths(announce)
-        self.assertListEqual(node_ann.best_paths[8], [(6, 4, 1, 10)])
+        self.assertListEqual(node_ann.best_paths[8], [[6, 4, 1, 10]])
         self.assertEqual(node_ann.path_pref[8], PathPref.PROVIDER)
-        self.assertListEqual(node_ann.best_paths[3], [(2, 5, 7, 9, 10)])
+        self.assertListEqual(node_ann.best_paths[3], [[2, 5, 7, 9, 10]])
         self.assertEqual(node_ann.path_pref[3], PathPref.PEER)
-        self.assertListEqual(node_ann.best_paths[1], [(10,)])
+        self.assertListEqual(node_ann.best_paths[1], [[10,]])
         self.assertEqual(node_ann.path_pref[1], PathPref.CUSTOMER)
 
         announce = Announcement.make_anycast_announcement(g1, [4])
         node_ann = g1.infer_paths(announce)
-        self.assertListEqual(node_ann.best_paths[8], [(6, 4)])
+        self.assertListEqual(node_ann.best_paths[8], [[6, 4]])
         self.assertEqual(node_ann.path_pref[8], PathPref.PROVIDER)
-        self.assertListEqual(node_ann.best_paths[3], [(1, 4)])
+        self.assertListEqual(node_ann.best_paths[3], [[1, 4]])
         self.assertEqual(node_ann.path_pref[3], PathPref.PROVIDER)
-        self.assertListEqual(node_ann.best_paths[10], [(1, 4)])
+        self.assertListEqual(node_ann.best_paths[10], [[1, 4]])
         self.assertEqual(node_ann.path_pref[10], PathPref.PROVIDER)
         self.assertEqual(node_ann.path_pref[2], PathPref.UNKNOWN)
         self.assertEqual(node_ann.path_pref[5], PathPref.UNKNOWN)
@@ -313,35 +313,35 @@ class TestASGraph(unittest.TestCase):
 
         announce = Announcement.make_anycast_announcement(graph, [10])
         node_ann = graph.infer_paths(announce)
-        self.assertListEqual(node_ann.best_paths[11], [(2, 10)])
+        self.assertListEqual(node_ann.best_paths[11], [[2, 10]])
         self.assertEqual(node_ann.path_pref[11], PathPref.CUSTOMER)
-        self.assertListEqual(node_ann.best_paths[4], [(3, 11, 2, 10)])
+        self.assertListEqual(node_ann.best_paths[4], [[3, 11, 2, 10]])
         self.assertEqual(node_ann.path_pref[4], PathPref.PROVIDER)
-        self.assertListEqual(node_ann.best_paths[12], [(2, 10)])
+        self.assertListEqual(node_ann.best_paths[12], [[2, 10]])
         self.assertEqual(node_ann.path_pref[12], PathPref.PROVIDER)
-        self.assertListEqual(node_ann.best_paths[1], [(10,)])
+        self.assertListEqual(node_ann.best_paths[1], [[10,]])
         self.assertEqual(node_ann.path_pref[1], PathPref.CUSTOMER)
 
         announce = Announcement.make_anycast_announcement(g1, [2])
         node_ann = g1.infer_paths(announce)
-        self.assertListEqual(node_ann.best_paths[11], [(2,)])
+        self.assertListEqual(node_ann.best_paths[11], [[2,]])
         self.assertEqual(node_ann.path_pref[11], PathPref.CUSTOMER)
-        self.assertListEqual(node_ann.best_paths[4], [(3, 11, 2)])
+        self.assertListEqual(node_ann.best_paths[4], [[3, 11, 2]])
         self.assertEqual(node_ann.path_pref[4], PathPref.PROVIDER)
-        self.assertListEqual(node_ann.best_paths[12], [(2,)])
+        self.assertListEqual(node_ann.best_paths[12], [[2,]])
         self.assertEqual(node_ann.path_pref[12], PathPref.PROVIDER)
-        self.assertListEqual(node_ann.best_paths[1], [(11, 2)])
+        self.assertListEqual(node_ann.best_paths[1], [[11, 2]])
         self.assertEqual(node_ann.path_pref[1], PathPref.PEER)
 
     def test_preferred(self):
         graph = _make_graph_preferred()
         announce = Announcement.make_anycast_announcement(graph, [4])
         node_ann = graph.infer_paths(announce)
-        self.assertListEqual(node_ann.best_paths[3], [(2, 4)])
+        self.assertListEqual(node_ann.best_paths[3], [[2, 4]])
         self.assertEqual(node_ann.path_pref[3], PathPref.PEER)
-        self.assertListEqual(node_ann.best_paths[5], [(1, 4)])
+        self.assertListEqual(node_ann.best_paths[5], [[1, 4]])
         self.assertEqual(node_ann.path_pref[5], PathPref.PEER)
-        self.assertListEqual(node_ann.best_paths[6], [(4,)])
+        self.assertListEqual(node_ann.best_paths[6], [[4,]])
         self.assertEqual(node_ann.path_pref[6], PathPref.PROVIDER)
 
     def test_multiple_choices_from_provider(self):
@@ -354,24 +354,24 @@ class TestASGraph(unittest.TestCase):
         self.assertEqual(node_ann.path_pref[12], PathPref.UNKNOWN)
         self.assertEqual(node_ann.path_pref[13], PathPref.UNKNOWN)
 
-        as5_paths = [(2, 1), (3, 1), (4, 1)]
+        as5_paths = [[2, 1], [3, 1], [4, 1]]
         self.assertCountEqual(node_ann.best_paths[5], as5_paths)
         self.assertEqual(node_ann.path_pref[5], PathPref.PROVIDER)
 
-        as8_paths = [(5, 2, 1), (5, 3, 1), (5, 4, 1)]
+        as8_paths = [[5, 2, 1], [5, 3, 1], [5, 4, 1]]
         self.assertCountEqual(node_ann.best_paths[8], as8_paths)
         self.assertEqual(node_ann.path_pref[8], PathPref.PROVIDER)
 
         as11_paths = [
-            (8, 5, 2, 1),
-            (8, 5, 3, 1),
-            (8, 5, 4, 1),
-            (9, 5, 2, 1),
-            (9, 5, 3, 1),
-            (9, 5, 4, 1),
-            (10, 5, 2, 1),
-            (10, 5, 3, 1),
-            (10, 5, 4, 1),
+            [8, 5, 2, 1],
+            [8, 5, 3, 1],
+            [8, 5, 4, 1],
+            [9, 5, 2, 1],
+            [9, 5, 3, 1],
+            [9, 5, 4, 1],
+            [10, 5, 2, 1],
+            [10, 5, 3, 1],
+            [10, 5, 4, 1],
         ]
         self.assertCountEqual(node_ann.best_paths[11], as11_paths)
 
@@ -380,34 +380,34 @@ class TestASGraph(unittest.TestCase):
         announce = Announcement.make_anycast_announcement(graph, [11])
         node_ann = graph.infer_paths(announce)
 
-        as13_paths = [(12, 10, 11), (12, 9, 11), (12, 8, 11)]
+        as13_paths = [[12, 10, 11], [12, 9, 11], [12, 8, 11]]
         self.assertCountEqual(node_ann.best_paths[13], as13_paths)
         self.assertEqual(node_ann.path_pref[13], PathPref.PROVIDER)
 
         as7_paths = [
-            (6, 2, 5, 10, 11),
-            (6, 2, 5, 9, 11),
-            (6, 2, 5, 8, 11),
-            (6, 3, 5, 10, 11),
-            (6, 3, 5, 9, 11),
-            (6, 3, 5, 8, 11),
-            (6, 4, 5, 10, 11),
-            (6, 4, 5, 9, 11),
-            (6, 4, 5, 8, 11),
+            [6, 2, 5, 10, 11],
+            [6, 2, 5, 9, 11],
+            [6, 2, 5, 8, 11],
+            [6, 3, 5, 10, 11],
+            [6, 3, 5, 9, 11],
+            [6, 3, 5, 8, 11],
+            [6, 4, 5, 10, 11],
+            [6, 4, 5, 9, 11],
+            [6, 4, 5, 8, 11],
         ]
         self.assertCountEqual(node_ann.best_paths[7], as7_paths)
         self.assertEqual(node_ann.path_pref[7], PathPref.PROVIDER)
 
         as1_paths = [
-            (2, 5, 10, 11),
-            (2, 5, 9, 11),
-            (2, 5, 8, 11),
-            (3, 5, 10, 11),
-            (3, 5, 9, 11),
-            (3, 5, 8, 11),
-            (4, 5, 10, 11),
-            (4, 5, 9, 11),
-            (4, 5, 8, 11),
+            [2, 5, 10, 11],
+            [2, 5, 9, 11],
+            [2, 5, 8, 11],
+            [3, 5, 10, 11],
+            [3, 5, 9, 11],
+            [3, 5, 8, 11],
+            [4, 5, 10, 11],
+            [4, 5, 9, 11],
+            [4, 5, 8, 11],
         ]
         self.assertCountEqual(node_ann.best_paths[1], as1_paths)
         self.assertEqual(node_ann.path_pref[1], PathPref.CUSTOMER)
@@ -417,25 +417,25 @@ class TestASGraph(unittest.TestCase):
         announce = Announcement.make_anycast_announcement(graph, [2, 4])
         node_ann = graph.infer_paths(announce)
 
-        as1_paths = [(2,), (4,)]
+        as1_paths = [[2,], [4,]]
         self.assertCountEqual(node_ann.best_paths[1], as1_paths)
         self.assertEqual(node_ann.path_pref[1], PathPref.CUSTOMER)
 
-        as3_paths = [(1, 4), (1, 2)]
+        as3_paths = [[1, 4], [1, 2]]
         self.assertCountEqual(node_ann.best_paths[3], as3_paths)
         self.assertEqual(node_ann.path_pref[3], PathPref.PROVIDER)
 
-        as7_paths = [(6, 4), (6, 2)]
+        as7_paths = [[6, 4], [6, 2]]
         self.assertCountEqual(node_ann.best_paths[7], as7_paths)
         self.assertEqual(node_ann.path_pref[7], PathPref.PROVIDER)
 
         as11_paths = [
-            (8, 5, 4),
-            (8, 5, 2),
-            (9, 5, 4),
-            (9, 5, 2),
-            (10, 5, 4),
-            (10, 5, 2),
+            [8, 5, 4],
+            [8, 5, 2],
+            [9, 5, 4],
+            [9, 5, 2],
+            [10, 5, 4],
+            [10, 5, 2],
         ]
         self.assertCountEqual(node_ann.best_paths[11], as11_paths)
         self.assertEqual(node_ann.path_pref[11], PathPref.PROVIDER)
@@ -449,19 +449,19 @@ class TestASGraph(unittest.TestCase):
         announce.source2neighbor2path[2][5] = (2,) # type: ignore
         node_ann = graph.infer_paths(announce)
 
-        as1_paths = [(2,), (4,)]
+        as1_paths = [[2,], [4,]]
         self.assertCountEqual(node_ann.best_paths[1], as1_paths)
         self.assertEqual(node_ann.path_pref[1], PathPref.CUSTOMER)
 
-        as3_paths = [(1, 4), (1, 2)]
+        as3_paths = [[1, 4], [1, 2]]
         self.assertCountEqual(node_ann.best_paths[3], as3_paths)
         self.assertEqual(node_ann.path_pref[3], PathPref.PROVIDER)
 
-        as7_paths = [(6, 4), (6, 2)]
+        as7_paths = [[6, 4], [6, 2]]
         self.assertCountEqual(node_ann.best_paths[7], as7_paths)
         self.assertEqual(node_ann.path_pref[7], PathPref.PROVIDER)
 
-        as11_paths = [(8, 5, 4), (9, 5, 4), (10, 5, 4)]
+        as11_paths = [[8, 5, 4], [9, 5, 4], [10, 5, 4]]
         self.assertCountEqual(node_ann.best_paths[11], as11_paths)
         self.assertEqual(node_ann.path_pref[11], PathPref.PROVIDER)
 
@@ -473,36 +473,36 @@ class TestASGraph(unittest.TestCase):
         announce = Announcement.make_anycast_announcement(graph, [8, 10])
         node_ann = graph.infer_paths(announce)
 
-        as11_paths = [(8,), (10,)]
+        as11_paths = [[8,], [10,]]
         self.assertCountEqual(node_ann.best_paths[11], as11_paths)
         self.assertEqual(node_ann.path_pref[11], PathPref.PROVIDER)
 
-        as13_paths = [(12, 8), (12, 10)]
+        as13_paths = [[12, 8], [12, 10]]
         self.assertCountEqual(node_ann.best_paths[13], as13_paths)
         self.assertEqual(node_ann.path_pref[13], PathPref.PROVIDER)
 
-        as9_paths = [(5, 8), (5, 10)]
+        as9_paths = [[5, 8], [5, 10]]
         self.assertCountEqual(node_ann.best_paths[9], as9_paths)
         self.assertEqual(node_ann.path_pref[9], PathPref.PROVIDER)
 
         as1_paths = [
-            (2, 5, 8),
-            (3, 5, 8),
-            (4, 5, 8),
-            (2, 5, 10),
-            (3, 5, 10),
-            (4, 5, 10),
+            [2, 5, 8],
+            [3, 5, 8],
+            [4, 5, 8],
+            [2, 5, 10],
+            [3, 5, 10],
+            [4, 5, 10],
         ]
         self.assertCountEqual(node_ann.best_paths[1], as1_paths)
         self.assertEqual(node_ann.path_pref[1], PathPref.CUSTOMER)
 
         as7_paths = [
-            (6, 2, 5, 8),
-            (6, 3, 5, 8),
-            (6, 4, 5, 8),
-            (6, 2, 5, 10),
-            (6, 3, 5, 10),
-            (6, 4, 5, 10),
+            [6, 2, 5, 8],
+            [6, 3, 5, 8],
+            [6, 4, 5, 8],
+            [6, 2, 5, 10],
+            [6, 3, 5, 10],
+            [6, 4, 5, 10],
         ]
         self.assertCountEqual(node_ann.best_paths[7], as7_paths)
         self.assertEqual(node_ann.path_pref[7], PathPref.PROVIDER)
@@ -513,23 +513,23 @@ class TestASGraph(unittest.TestCase):
         announce.source2neighbor2path[8][5] = (8,) # type: ignore
         node_ann = graph.infer_paths(announce)
 
-        as11_paths = [(8,), (10,)]
+        as11_paths = [[8,], [10,]]
         self.assertCountEqual(node_ann.best_paths[11], as11_paths)
         self.assertEqual(node_ann.path_pref[11], PathPref.PROVIDER)
 
-        as13_paths = [(12, 8), (12, 10)]
+        as13_paths = [[12, 8], [12, 10]]
         self.assertCountEqual(node_ann.best_paths[13], as13_paths)
         self.assertEqual(node_ann.path_pref[13], PathPref.PROVIDER)
 
-        as9_paths = [(5, 10)]
+        as9_paths = [[5, 10]]
         self.assertCountEqual(node_ann.best_paths[9], as9_paths)
         self.assertEqual(node_ann.path_pref[9], PathPref.PROVIDER)
 
-        as1_paths = [(2, 5, 10), (3, 5, 10), (4, 5, 10)]
+        as1_paths = [[2, 5, 10], [3, 5, 10], [4, 5, 10]]
         self.assertCountEqual(node_ann.best_paths[1], as1_paths)
         self.assertEqual(node_ann.path_pref[1], PathPref.CUSTOMER)
 
-        as7_paths = [(6, 2, 5, 10), (6, 3, 5, 10), (6, 4, 5, 10)]
+        as7_paths = [[6, 2, 5, 10], [6, 3, 5, 10], [6, 4, 5, 10]]
         self.assertCountEqual(node_ann.best_paths[7], as7_paths)
         self.assertEqual(node_ann.path_pref[7], PathPref.PROVIDER)
 
@@ -539,11 +539,11 @@ class TestASGraph(unittest.TestCase):
 
         announce = Announcement.make_anycast_announcement(graph, [2])
         node_ann = graph.infer_paths(announce)
-        self.assertListEqual(node_ann.best_paths[9], [(1, 2)])
+        self.assertListEqual(node_ann.best_paths[9], [[1, 2]])
         self.assertEqual(node_ann.path_pref[9], PathPref.CUSTOMER)
-        self.assertListEqual(node_ann.best_paths[6], [(5, 9, 1, 2)])
+        self.assertListEqual(node_ann.best_paths[6], [[5, 9, 1, 2]])
         self.assertEqual(node_ann.path_pref[6], PathPref.PROVIDER)
-        self.assertListEqual(node_ann.best_paths[4], [(3, 1, 2)])
+        self.assertListEqual(node_ann.best_paths[4], [[3, 1, 2]])
         self.assertEqual(node_ann.path_pref[4], PathPref.PROVIDER)
         self.assertEqual(node_ann.path_pref[7], PathPref.UNKNOWN)
         self.assertEqual(node_ann.path_pref[8], PathPref.UNKNOWN)
@@ -551,15 +551,15 @@ class TestASGraph(unittest.TestCase):
 
         announce = Announcement.make_anycast_announcement(g1, [4])
         node_ann = g1.infer_paths(announce)
-        self.assertListEqual(node_ann.best_paths[10], [(3, 4)])
+        self.assertListEqual(node_ann.best_paths[10], [[3, 4]])
         self.assertEqual(node_ann.path_pref[10], PathPref.CUSTOMER)
-        self.assertListEqual(node_ann.best_paths[2], [(1, 3, 4)])
+        self.assertListEqual(node_ann.best_paths[2], [[1, 3, 4]])
         self.assertEqual(node_ann.path_pref[2], PathPref.PROVIDER)
-        self.assertListEqual(node_ann.best_paths[6], [(5, 3, 4)])
+        self.assertListEqual(node_ann.best_paths[6], [[5, 3, 4]])
         self.assertEqual(node_ann.path_pref[6], PathPref.PROVIDER)
-        self.assertListEqual(node_ann.best_paths[7], [(10, 3, 4)])
+        self.assertListEqual(node_ann.best_paths[7], [[10, 3, 4]])
         self.assertEqual(node_ann.path_pref[7], PathPref.PROVIDER)
-        self.assertListEqual(node_ann.best_paths[8], [(7, 10, 3, 4)])
+        self.assertListEqual(node_ann.best_paths[8], [[7, 10, 3, 4]])
         self.assertEqual(node_ann.path_pref[8], PathPref.PROVIDER)
         self.assertEqual(node_ann.path_pref[9], PathPref.UNKNOWN)
 
@@ -590,9 +590,9 @@ class TestASGraph(unittest.TestCase):
                     # Route will not propagate to AS5
                     continue
                 if as5_pref > best_pref:
-                    as5_paths = [(transit, 1)]
+                    as5_paths = [[transit, 1]]
                 else:
-                    as5_paths.append((transit, 1))
+                    as5_paths.append([transit, 1])
                 best_pref = max(best_pref, as5_pref)
 
             self.assertCountEqual(node_ann.best_paths[5], as5_paths)
@@ -604,28 +604,28 @@ class TestASGraph(unittest.TestCase):
         announce = Announcement.make_anycast_announcement(graph, [1, 7])
         node_ann = graph.infer_paths(announce)
 
-        self.assertCountEqual(node_ann.best_paths[2], [(1,)])
+        self.assertCountEqual(node_ann.best_paths[2], [[1,]])
         self.assertEqual(node_ann.path_pref[2], PathPref.PEER)
-        self.assertCountEqual(node_ann.best_paths[4], [(1,)])
+        self.assertCountEqual(node_ann.best_paths[4], [[1,]])
         self.assertEqual(node_ann.path_pref[4], PathPref.CUSTOMER)
 
-        self.assertCountEqual(node_ann.best_paths[3], [(7,)])
+        self.assertCountEqual(node_ann.best_paths[3], [[7,]])
         self.assertEqual(node_ann.path_pref[3], PathPref.CUSTOMER)
-        self.assertCountEqual(node_ann.best_paths[5], [(7,), (1,)])
+        self.assertCountEqual(node_ann.best_paths[5], [[7,], [1,]])
         self.assertEqual(node_ann.path_pref[5], PathPref.CUSTOMER)
 
         self.assertCountEqual(
-            node_ann.best_paths[6], [(2, 1), (4, 1), (3, 7), (5, 7), (5, 1)]
+            node_ann.best_paths[6], [[2, 1], [4, 1], [3, 7], [5, 7], [5, 1]]
         )
         self.assertEqual(node_ann.path_pref[6], PathPref.PROVIDER)
 
         self.assertCountEqual(
-            node_ann.best_paths[8], [(4, 1), (3, 7), (5, 7), (5, 1)]
+            node_ann.best_paths[8], [[4, 1], [3, 7], [5, 7], [5, 1]]
         )
         self.assertEqual(node_ann.path_pref[8], PathPref.PEER)
 
         self.assertCountEqual(
-            node_ann.best_paths[9], [(4, 1), (3, 7), (5, 7), (5, 1)]
+            node_ann.best_paths[9], [[4, 1], [3, 7], [5, 7], [5, 1]]
         )
         self.assertEqual(node_ann.path_pref[9], PathPref.CUSTOMER)
 

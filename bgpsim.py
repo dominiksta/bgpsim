@@ -15,11 +15,7 @@ class NodeAccouncementData():
     path_pref: dict[int, PathPref] = dc.field(
         default_factory=lambda: defaultdict(lambda: PathPref.UNKNOWN)
     )
-    # TODO: paths are currently somewhat incorrectly typed as a tuples (which have a
-    # fixed size in the type system although in terms of the language they are
-    # actually of a dynamic size). Once we change that to sequences we can enable
-    # type checking instead of putting Any here.
-    best_paths: dict[int, List[Any]] = dc.field(
+    best_paths: dict[int, List[List[int]]] = dc.field(
         default_factory=lambda: defaultdict(list)
     )
     path_len: dict[int, int] = dc.field(default_factory=dict)
@@ -113,14 +109,14 @@ class Announcement:
     AS-path poisoning.
     """
 
-    source2neighbor2path: Mapping[int, Mapping[int, Tuple[int]]]
+    source2neighbor2path: Mapping[int, Mapping[int, List[int]]]
 
     @staticmethod
     def make_anycast_announcement(asgraph: ASGraph, sources: Sequence[int]):
         """Make announcement from sources to all neighbors without prepending."""
-        src2nei2path = dict()
+        src2nei2path: dict[int, dict[int, List[int]]] = dict()
         for src in sources:
-            src2nei2path[src] = {nei: () for nei in asgraph.g[src]}
+            src2nei2path[src] = {nei: [] for nei in asgraph.g[src]}
         return Announcement(src2nei2path)
 
 
@@ -168,7 +164,7 @@ class ASGraph:
     def __init__(self):
         self.g = nx.DiGraph()
         self.workqueue = WorkQueue()
-        self.announce = None
+        self.announce: Optional[Announcement] = None
         self.callbacks = dict()
 
     def add_peering(self, source: int, sink: int, relationship: Relationship) -> None:
@@ -313,7 +309,7 @@ class ASGraph:
 
     def update_paths(
             self, node_ann: NodeAccouncementData, exporter: int, importer: int,
-            announce_path: Tuple[int] = None,
+            announce_path: List[int] = None,
     ) -> bool:
         """Check for new paths or add paths tied for best at importer.
 
@@ -337,10 +333,10 @@ class ASGraph:
         new_paths = None
         if announce_path is not None:
             assert importer not in announce_path
-            new_paths = [(exporter,) + announce_path]
+            new_paths = [[exporter] + announce_path]
         else:
             exported_paths = node_ann.best_paths[exporter]
-            new_paths = [(exporter,) + p for p in exported_paths if importer not in p]
+            new_paths = [[exporter] + p for p in exported_paths if importer not in p]
 
         if node[NODE_IMPORT_FILTER] is not None:
             func, data = node[NODE_IMPORT_FILTER]
