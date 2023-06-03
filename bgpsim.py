@@ -6,7 +6,7 @@ import copy
 import dataclasses as dc
 import enum
 import logging
-from typing import Any, Callable, List, Mapping, Optional, Sequence, Tuple, Union
+from typing import Callable, List, Mapping, Optional, Sequence, Tuple, Union
 
 import networkx as nx
 
@@ -230,10 +230,6 @@ class ASGraph:
         care about whether the provider routes traverse a P2P or any number of C2P
         links.
 
-        This function can only be called once, as it adds metadata to self.g nodes and
-        edges. To infer AS-paths for multiple announcements, consider cloning the graph
-        with ASGraph.clone(). TODO: hopefully no longer
-
         When `stop_at_target_asn` is given, the simulation of the announcement will
         terminate once `stop_at_target_count` routes have been found. This is useful
         if you only want to specifically find a route between two ASes.
@@ -247,7 +243,6 @@ class ASGraph:
         in the announcements.
         """
 
-        assert self.announce is None
         self.check_announcement(announce)
         self.announce = announce
         node_ann = NodeAccouncementData()
@@ -365,14 +360,6 @@ class ASGraph:
 
         return False
 
-    def clone(self):
-        """Return a deep copy of the current ASGraph."""
-        assert self.announce is None
-        graph = ASGraph()
-        graph.g = copy.deepcopy(self.g)
-        graph.workqueue = WorkQueue()
-        graph.announce = None
-        return graph
 
     @staticmethod
     def read_caida_asrel_graph(filepath):

@@ -283,7 +283,6 @@ class TestWorkQueue(unittest.TestCase):
 class TestASGraph(unittest.TestCase):
     def test_implicit_withdraw(self):
         graph = _make_graph_implicit_withdrawal()
-        g1 = graph.clone()
 
         announce = Announcement.make_anycast_announcement(graph, [10])
         node_ann = graph.infer_paths(announce)
@@ -294,8 +293,8 @@ class TestASGraph(unittest.TestCase):
         self.assertListEqual(node_ann.best_paths[1], [[10,]])
         self.assertEqual(node_ann.path_pref[1], PathPref.CUSTOMER)
 
-        announce = Announcement.make_anycast_announcement(g1, [4])
-        node_ann = g1.infer_paths(announce)
+        announce = Announcement.make_anycast_announcement(graph, [4])
+        node_ann = graph.infer_paths(announce)
         self.assertListEqual(node_ann.best_paths[8], [[6, 4]])
         self.assertEqual(node_ann.path_pref[8], PathPref.PROVIDER)
         self.assertListEqual(node_ann.best_paths[3], [[1, 4]])
@@ -309,7 +308,6 @@ class TestASGraph(unittest.TestCase):
 
     def test_implicit_withdrawal_multihop(self):
         graph = _make_graph_implicit_withdrawal_multihop()
-        g1 = graph.clone()
 
         announce = Announcement.make_anycast_announcement(graph, [10])
         node_ann = graph.infer_paths(announce)
@@ -322,8 +320,8 @@ class TestASGraph(unittest.TestCase):
         self.assertListEqual(node_ann.best_paths[1], [[10,]])
         self.assertEqual(node_ann.path_pref[1], PathPref.CUSTOMER)
 
-        announce = Announcement.make_anycast_announcement(g1, [2])
-        node_ann = g1.infer_paths(announce)
+        announce = Announcement.make_anycast_announcement(graph, [2])
+        node_ann = graph.infer_paths(announce)
         self.assertListEqual(node_ann.best_paths[11], [[2,]])
         self.assertEqual(node_ann.path_pref[11], PathPref.CUSTOMER)
         self.assertListEqual(node_ann.best_paths[4], [[3, 11, 2]])
@@ -535,7 +533,6 @@ class TestASGraph(unittest.TestCase):
 
     def test_peer_peer_relationships(self):
         graph = _make_graph_peer_peer_relationships()
-        g1 = graph.clone()
 
         announce = Announcement.make_anycast_announcement(graph, [2])
         node_ann = graph.infer_paths(announce)
@@ -549,8 +546,8 @@ class TestASGraph(unittest.TestCase):
         self.assertEqual(node_ann.path_pref[8], PathPref.UNKNOWN)
         self.assertEqual(node_ann.path_pref[10], PathPref.UNKNOWN)
 
-        announce = Announcement.make_anycast_announcement(g1, [4])
-        node_ann = g1.infer_paths(announce)
+        announce = Announcement.make_anycast_announcement(graph, [4])
+        node_ann = graph.infer_paths(announce)
         self.assertListEqual(node_ann.best_paths[10], [[3, 4]])
         self.assertEqual(node_ann.path_pref[10], PathPref.CUSTOMER)
         self.assertListEqual(node_ann.best_paths[2], [[1, 3, 4]])
@@ -656,9 +653,6 @@ class TestCaidaASGraph(unittest.TestCase):
             urllib.request.urlretrieve(CAIDA_AS_RELATIONSHIPS_URL, db_filepath)
         cls.graph = ASGraph.read_caida_asrel_graph(db_filepath)
 
-    def setUp(self):
-        self.graph = TestCaidaASGraph.graph.clone()
-
     def test_load_caida_asrel(self):
         self.assertIsNotNone(self.graph)
 
@@ -672,16 +666,14 @@ class TestCaidaASGraph(unittest.TestCase):
             announce = Announcement.make_anycast_announcement(self.graph, sources)
             self.assertCountEqual(announce.source2neighbor2path.keys(), sources)
 
-            g1 = self.graph.clone()
-            node_ann1 = g1.infer_paths(announce)
+            node_ann1 = self.graph.infer_paths(announce)
 
             for iternum in range(ITERATIONS):
                 print(f"source set {setnum}/{SETS}, iteration {iternum}/{ITERATIONS}")
 
-                g2 = self.graph.clone()
-                node_ann2 = g2.infer_paths(announce)
+                node_ann2 = self.graph.infer_paths(announce)
 
-                for nodenum in g1.g.nodes:
+                for nodenum in self.graph.g.nodes:
                     n1_paths = node_ann1.best_paths[nodenum]
                     n2_paths = node_ann2.best_paths[nodenum]
                     self.assertCountEqual(n1_paths, n2_paths)
