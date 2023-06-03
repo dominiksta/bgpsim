@@ -6,7 +6,7 @@ import copy
 import dataclasses as dc
 import enum
 import logging
-from typing import Callable, Mapping, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, List, Mapping, Optional, Sequence, Tuple, Union
 
 import networkx as nx
 
@@ -15,14 +15,16 @@ class NodeAccouncementData():
     path_pref: dict[int, PathPref] = dc.field(
         default_factory=lambda: defaultdict(lambda: PathPref.UNKNOWN)
     )
-    best_paths: dict[int, Sequence[Tuple[int]]] = dc.field(
-        default_factory=lambda: defaultdict(lambda: [])
+    # TODO: paths are currently somewhat incorrectly typed as a tuples (which have a
+    # fixed size in the type system although in terms of the language they are
+    # actually of a dynamic size). Once we change that to sequences we can enable
+    # type checking instead of putting Any here.
+    best_paths: dict[int, List[Any]] = dc.field(
+        default_factory=lambda: defaultdict(list)
     )
     path_len: dict[int, int] = dc.field(default_factory=dict)
-    import_filter: dict[int, int] = dc.field(default_factory=dict)
 
 
-NODE_BEST_PATHS = "best-paths"
 NODE_IMPORT_FILTER = "import-filter"
 EDGE_REL = "edge-attr-relationship"
 
@@ -173,11 +175,9 @@ class ASGraph:
         """Add nodes and edges corresponding to a peering relationship."""
         if source not in self.g:
             self.g.add_node(source)
-            self.g.nodes[source][NODE_BEST_PATHS] = list()
             self.g.nodes[source][NODE_IMPORT_FILTER] = None
         if sink not in self.g:
             self.g.add_node(sink)
-            self.g.nodes[sink][NODE_BEST_PATHS] = list()
             self.g.nodes[sink][NODE_IMPORT_FILTER] = None
         self.g.add_edge(source, sink)
         self.g[source][sink][EDGE_REL] = Relationship(relationship)
@@ -263,7 +263,7 @@ class ASGraph:
             edge = self.workqueue.get(pref)
             while edge:
                 if stop_at_target_asn is not None and \
-                   len(self.g.nodes[stop_at_target_asn][NODE_BEST_PATHS]) \
+                   len(node_ann.best_paths[stop_at_target_asn]) \
                    > stop_at_target_count:
                     break
 
@@ -339,7 +339,7 @@ class ASGraph:
             assert importer not in announce_path
             new_paths = [(exporter,) + announce_path]
         else:
-            exported_paths = self.g.nodes[exporter][NODE_BEST_PATHS]
+            exported_paths = node_ann.best_paths[exporter]
             new_paths = [(exporter,) + p for p in exported_paths if importer not in p]
 
         if node[NODE_IMPORT_FILTER] is not None:
@@ -351,7 +351,7 @@ class ASGraph:
         new_path_len = len(new_paths[0])
 
         if current_pref == PathPref.UNKNOWN:
-            self.g.nodes[importer][NODE_BEST_PATHS] = new_paths
+            node_ann.best_paths[importer] = new_paths
             node_ann.path_len[importer] = new_path_len
             node_ann.path_pref[importer] = new_pref
             return True
@@ -364,7 +364,7 @@ class ASGraph:
         ].count(False) == 0
 
         if new_path_len == current_path_len:
-            self.g.nodes[importer][NODE_BEST_PATHS].extend(new_paths)
+            node_ann.best_paths[importer].extend(new_paths)
             assert self.workqueue.check_work(self, node_ann, importer)
 
         return False
