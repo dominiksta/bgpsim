@@ -1,11 +1,11 @@
 import os
 import time
-from typing import List, Tuple
+from typing import List
 import urllib.parse
 import urllib.request
 from pathlib import Path
 
-from bgpsim import NODE_BEST_PATHS, ASGraph, Announcement
+from bgpsim import ASGraph, Announcement
 
 _graph = None
 
@@ -26,18 +26,18 @@ def get_graph():
         _graph = ASGraph.read_caida_asrel_graph(get_caida_asrel_file())
         print(f'Done reading AS relationship file, read {len(_graph.g.nodes)} ASes')
 
-    return _graph.clone()
+    return _graph
 
-def compute_likely_paths(source: int, sink: int) -> List[Tuple[int]]:
+def compute_likely_paths(source: int, sink: int) -> List[List[int]]:
     graph = get_graph()
 
     announcement = Announcement.make_anycast_announcement(graph, [ source ])
     before = time.time()
     print(f'Computing likely paths to AS{source} on the internet...')
-    graph.infer_paths(announcement, stop_at_target_asn=sink)
+    node_ann = graph.infer_paths(announcement, stop_at_target_asn=sink)
     print(f'Done computing paths, took {round(time.time() - before, 3)}s')
 
-    return graph.g.nodes[sink][NODE_BEST_PATHS]
+    return node_ann.best_paths[sink]
 
 def main():
     print(compute_likely_paths(
