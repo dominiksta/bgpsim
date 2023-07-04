@@ -2,16 +2,22 @@ from __future__ import annotations
 
 import bz2
 from collections import defaultdict, Counter
-import copy
 import dataclasses as dc
 import enum
 import logging
-from typing import Callable, List, Mapping, Optional, Sequence, Tuple, Union
+from typing import (
+    Callable, Dict, List, Mapping, Optional, Sequence, Tuple, Union
+)
 
 import networkx as nx
 
 @dc.dataclass
 class NodeAccouncementData():
+    # When we find a path through AS1, we remember the relationship between AS1 and
+    # the prior AS in the path. When finding another path through AS1, this then
+    # allows us to discard paths that arrive at AS1 from an AS with a less preffered
+    # relationship. (HACK: This is an implementation detail and should not be
+    # returned to the user.)
     path_pref: dict[int, PathPref] = dc.field(
         default_factory=lambda: defaultdict(lambda: PathPref.UNKNOWN)
     )
@@ -39,7 +45,7 @@ class PathPref(enum.IntEnum):
 
     @staticmethod
     def from_relationship(graph: ASGraph, exporter: int, importer: int):
-        """Compute the PathPref at importer given the relationship in the ASGraph."""
+        """Compute the PathPref *at importer* given the relationship in the ASGraph."""
         rel = graph.g[importer][exporter][EDGE_REL]
         if rel == Relationship.P2C:
             return PathPref.CUSTOMER
@@ -113,7 +119,23 @@ class Announcement:
 
     @staticmethod
     def make_anycast_announcement(asgraph: ASGraph, sources: Sequence[int]):
-        """Make announcement from sources to all neighbors without prepending."""
+        """Make announcement from sources to all neighbors without prepending.
+
+        Example:
+
+          3  7
+          |  |
+        4-1  5-6-8
+          |
+          2
+
+        make_anycast_announcement(graph, [1, 5])
+
+        {
+          1: { 2: [], 3: [], 4: [] },
+          5: { 7: [], 6: [] },
+        }
+        """
         src2nei2path: dict[int, dict[int, List[int]]] = dict()
         for src in sources:
             src2nei2path[src] = {nei: [] for nei in asgraph.g[src]}
@@ -122,7 +144,26 @@ class Announcement:
 
 class WorkQueue:
     def __init__(self):
-        self.pref2depth2edge = {
+
+        # Stores information about which (types of) links are available in the paths
+        # to the announcement sources at different path lengths/depths.
+        #
+        # Example:
+        # {
+        #     PathPref.CUSTOMER: {
+        #         3: [
+        #             # a p2c link at depth 3 between AS1001 and AS1005
+        #             (1001, 1005),
+        #             (1007, 1004)
+        #         ],
+        #         5: [ (1001, 1004) ],
+        #     },
+        #     # ...
+        # }
+        self.pref2depth2edge: Dict[
+            PathPref,
+            Dict[int, List[Tuple[int, int]]]
+        ] = {
             PathPref.CUSTOMER: defaultdict(list),
             PathPref.PEER: defaultdict(list),
             PathPref.PROVIDER: defaultdict(list),
@@ -168,7 +209,12 @@ class ASGraph:
         self.callbacks = dict()
 
     def add_peering(self, source: int, sink: int, relationship: Relationship) -> None:
-        """Add nodes and edges corresponding to a peering relationship."""
+        """Add nodes and edges corresponding to a peering relationship.
+
+        Note that this adds the relationship bidirectionally. So if you call
+        `add_peering(1, 2, Relationship.C2P)` there is no need to call
+        `add_peering(2, 1, Relationship.P2C)`.
+        """
         if source not in self.g:
             self.g.add_node(source)
             self.g.nodes[source][NODE_IMPORT_FILTER] = None
@@ -195,6 +241,8 @@ class ASGraph:
         self.g.nodes[asn][NODE_IMPORT_FILTER] = (func, data)
 
     def set_callback(self, when: InferenceCallback, func: Callable) -> None:
+        """Add a user defined callback for specific points in the execution. By
+        default, there are no callbacks set."""
         self.callbacks[when] = func
 
     def check_announcement(self, announce: Announcement) -> None:
@@ -269,6 +317,7 @@ class ASGraph:
                     continue
                 assert PathPref.from_relationship(self, exporter, importer) == pref
                 if self.update_paths(node_ann, exporter, importer):
+                    # only runs when importer has not been processed yet
                     self.workqueue.add_work(self, node_ann, importer)
                 edge = self.workqueue.get(pref)
 
@@ -322,8 +371,9 @@ class ASGraph:
 
         assert current_pref >= new_pref or current_pref == PathPref.UNKNOWN
 
-        if current_pref > new_pref:
-            return False
+        # if we already know a path including exporter->importer, we discard any path
+        # that would have a lower preference link between exporter->importer
+        if current_pref > new_pref: return False
 
         new_paths = None
         if announce_path is not None:
@@ -331,6 +381,7 @@ class ASGraph:
             new_paths = [[exporter] + announce_path]
         else:
             exported_paths = node_ann.best_paths[exporter]
+            # discard routes with cycles
             new_paths = [[exporter] + p for p in exported_paths if importer not in p]
 
         if node[NODE_IMPORT_FILTER] is not None:
